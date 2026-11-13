@@ -1,60 +1,55 @@
 import serial
 import serial.tools.list_ports
+from serial.serialutil import SerialException
 
 port = None
 ARDUINO_VID = 0x2341
 
+print("searching for Arduino")
 for p in serial.tools.list_ports.comports():
     print(p.device, "|", p.description, "|", p.vid, p.pid)
     if p.vid == ARDUINO_VID:
-        port = serial.Serial(p.device)
+        try:
+            port = serial.Serial(p.device)
+        except SerialException:
+            print("port taken by another device")
         break
 
-print("waiting for data")
-print(port.read())
+if port == None:
+    print("no port found")
 
-# # shoulder 1 and 2 are 1 servo each
-# # wrist1's AoR is parallel with elbow AoR
-# # wrist2's AoR is perp to elbow AoR
-# joint_names = ["shoulder1", "shoulder2", "elbow", "wrist1", "wrist2", "gripper"]
-# joint_targets = [0, 0, 0, 0, 0] 
+else:
+    joint_names = ["g", "wr", "wp", "e", "s", "t"]
+    joint_targets = [0, 0, 0, 0, 0, 0] 
 
 
-# def reset_to_home():
-#     joint_targets = [0, 0, 0, 0, 0]
 
+    while True:
+        print("COMMANDS: stop, ch_port <from> <to>, " +", ".join(f"{name} <angle>" for name in joint_names))
+        cmd = input(">")
 
-# reset_to_home()
-
-
-# while True:
-#     print("help for full command list")
-#     cmd = input(">")
-
-#     if (cmd == "help"):
-#         print("stop, t <angle>, s <angle>, e <angle>, w1 <angle>, w2 <angle>, g")
-#     elif cmd == "stop":
-#         break
-#     else:
-#         data = cmd.split()
-#         if len(data) != 2:
-#             print("invalid command")
-#         else :
-#             try:
-#                 angle = float(data[1])
-#                 # elif data[0] == "t":
-#                 #     pass
-#                 # elif data[0] == "s":
-#                 #     pass
-#                 # elif data[0] == "e":
-#                 #     pass
-#                 # elif data[0] == "w1":
-#                 #     pass
-#                 # elif data[0] == "w2":
-#                 #     pass
-#                 # elif data[0] == "g":
-#                 #     pass
-#                 # else:
-#                 #     print("invalid command")
-#             except ValueError:
-#                 print("second arg has to be numeric")
+        if cmd == "stop":
+            break
+        elif len(cmd) >= 7 and cmd[:7] == "ch_port":
+            port.write((cmd + "\n").encode());
+        else:
+            data = cmd.split()
+            if len(data) != 2:
+                print("invalid command: " + cmd)
+            else :
+                try:
+                    angle = float(data[1])
+                    parsed_cmd = "move "
+                    for name in joint_names:
+                        if name == data[0]:
+                            parsed_cmd += str(angle)
+                        parsed_cmd += ","
+                    parsed_cmd += "\n"
+                    print("writing " + parsed_cmd)
+                    port.write(parsed_cmd.encode())
+                except ValueError:
+                    print("invalid command: " + cmd)
+        
+        lines = int(port.readline().decode().strip())
+        for i in range(lines):
+            print(port.readline().decode().strip())
