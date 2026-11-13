@@ -25,20 +25,14 @@ class SerialIO:
     def write_change_port(from_port: int, to_port: int):
         port.write(("ch_port " + str(from_port) + " " + str(to_port) + "\n").encode())
     
-    def write_move_joints(angles: list[float]):
-        out_str = ""
+    def write_move_joints(angles: list[float | None]):
+        out_str = "move "
         for angle in angles:
-            out_str += str(angle) + ","
-        port.write((out_str + "\n").encode())
-    
-    def write_move_joint(joint_abb: str, angle: float):
-        out_str = ""
-        for abb in joint_abbs:
-            if abb == joint_abb:
+            if angle is not None:
                 out_str += str(angle)
             out_str += ","
         port.write((out_str + "\n").encode())
-
+    
     def get_response() -> list[str]:
         lines = int(port.readline().decode().strip())
         out = []

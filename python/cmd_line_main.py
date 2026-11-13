@@ -2,54 +2,45 @@ import serial
 import serial.tools.list_ports
 from serial.serialutil import SerialException
 
-port = None
 ARDUINO_VID = 0x2341
+joint_names = ["g", "wr", "wp", "e", "s", "t"]
+joint_targets = [0, 0, 0, 0, 0, 0] 
 
-print("searching for Arduino")
-for p in serial.tools.list_ports.comports():
-    print(p.device, "|", p.description, "|", p.vid, p.pid)
-    if p.vid == ARDUINO_VID:
-        try:
-            port = serial.Serial(p.device)
-        except SerialException:
-            print("port taken by another device")
+serial_io = SerialIO(ARDUINO_VID, joint_names)
+
+
+while True:
+    print("COMMANDS: stop, ch_port <from> <to>, " +", ".join(joint_names))
+    cmd = input(">")
+
+    if cmd == "stop":
         break
-
-if port == None:
-    print("no port found")
-
-else:
-    joint_names = ["g", "wr", "wp", "e", "s", "t"]
-    joint_targets = [0, 0, 0, 0, 0, 0] 
-
-
-
-    while True:
-        print("COMMANDS: stop, ch_port <from> <to>, " +", ".join(f"{name} <angle>" for name in joint_names))
-        cmd = input(">")
-
-        if cmd == "stop":
-            break
-        elif len(cmd) >= 7 and cmd[:7] == "ch_port":
-            port.write((cmd + "\n").encode());
+    elif len(cmd) >= 7 and cmd[:7] == "ch_port":
+        data = cmd.split(" ")
+        if len(data) != 3:
+            print("Invalid command: " + cmd)
+        try:
+            from_port = int(data[1])
+            to_port = int(data[2])
+            serial_io.write_change_port(from_port, to_port)
+        except ValueError:
+            print("Invalid command: " + cmd)
+    else:
+        data = cmd.split(" ")
+        if len(data) != 2:
+            print("Invalid command: " + cmd)
         else:
-            data = cmd.split()
-            if len(data) != 2:
-                print("invalid command: " + cmd)
-            else :
-                try:
-                    angle = float(data[1])
-                    parsed_cmd = "move "
-                    for name in joint_names:
-                        if name == data[0]:
-                            parsed_cmd += str(angle)
-                        parsed_cmd += ","
-                    parsed_cmd += "\n"
-                    print("writing " + parsed_cmd)
-                    port.write(parsed_cmd.encode())
-                except ValueError:
-                    print("invalid command: " + cmd)
-        
-        lines = int(port.readline().decode().strip())
-        for i in range(lines):
-            print(port.readline().decode().strip())
+            try:
+                angle = float(data[1])
+                angles_list = []
+                for name in joint_names:
+                    if name == data[0]:
+                        angles_list.append(angle)
+                    else:
+                        angles_list.append(None)
+                
+                serial_io.write_move_joints(angles_list)
+            except ValueError:
+                print("Invalid command: " + cmd)
+    
+    serial_io.print_response()
