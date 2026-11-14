@@ -3,6 +3,7 @@
 
 const int numServos = 7;
 const int shoulder2Index = 5;
+bool enabled = true;
 
 Servo servos[numServos];
 String names[numServos] {
@@ -25,18 +26,49 @@ int servoMap[numServos][4] = {
   {560, 2350, -82, 82} // turret
 }; // range of turret: -82.04 to +82.04
 
+// measured in degrees/sec
+int servoMaxSpeeds[numServos] = {
+  -1,
+  270,
+  180,
+  180,
+  90,
+  90,
+  90
+};
+
+bool shouldPower[numServos] = {true, true, true, true, true, true, true};
+double endTargetAngles[numServos] = {0, 0, 0, 0, 0, 0, 0};
+double curTargetAngles[numServos] = {0, 0, 0, 0, 0, 0, 0}; // assumed current angles
+unsigned long prevMillis;
+
 void setup() {
   Serial.begin(9600);
   for (int i = 0; i < numServos; i++) {
     servos[i].attach(pins[i]);
   }
+
+  // initiating servos to zero positions
+  prevMillis = millis();
+  powerServos();
 }
 
 void loop() {
   if (Serial.available() > 0) {
     String data = Serial.readStringUntil('\n');
 
-    if (data.length() >= 7 && data.substring(0, 7) == "ch_port") {
+    if (data == "start") {
+      enabled = true;
+      writeBack({String("Arm enabled")});
+    } 
+    else if (data == "stop") {
+      enabled = false;
+      writeBack({String("Arm disabled")});
+    } 
+    else if (!enabled) {
+      writeBack({String("Arm current disabled")});
+    } 
+    else if (data.length() >= 7 && data.substring(0, 7) == "ch_port") {
       int portSeparator = data.indexOf(" ", 8);
       if (portSeparator == -1) {
         writeBack({String("Invalid ch_port command")});
@@ -64,52 +96,70 @@ void loop() {
       servos[servoI].detach();
       servos[servoI].attach(toPort);
       pins[servoI] = toPort;
-      writeBack({String("Port move successfull")});
+      writeBack({String("Port move successful")});
   
     } else if (data.length() >= 4 && data.substring(0, 4) == "move") {
-      bool shouldPower[numServos];
-      double angles[numServos];
       data = data.substring(5);
 
       for (int i = 0; i < numServos; i++) {
         if (i == shoulder2Index) {
-          angles[i] = -angles[i-1];
           shouldPower[i] = shouldPower[i-1];
+          if (shouldPower[i]) {
+            endTargetAngles[i] = -endTargetAngles[i-1];
+          }
         } else {
           int endI = data.indexOf(",");
           if (endI == 0) {
             shouldPower[i] = false;
-            angles[i] = 100;
           } else {
             shouldPower[i] = true;
             if (endI == -1) {
-              angles[i] = data.toDouble();
+              endTargetAngles[i] = data.toDouble();
             } else {
-              angles[i] = data.substring(0, endI).toDouble();
+              endTargetAngles[i] = data.substring(0, endI).toDouble();
             }
           }
           data = data.substring(endI+1);
         }
       }
-
-      int pwms[numServos];
-      mapAngleToPwm(angles, pwms);
       
       String angleStr = String("angles: ");
       String powerStr = String("should power: ");
       for (int i = 0; i < numServos; i++) {
-        angleStr += angles[i] + String(", ");
+        angleStr += endTargetAngles[i] + String(", ");
         powerStr += shouldPower[i] + String(", ");
       }
       writeBack({angleStr, powerStr});
-
-      for (int i = 0; i < numServos; i++) {
-        if (shouldPower[i]) {
-          servos[i].writeMicroseconds(pwms[i]);
-        }
-      }
     } else {
       writeBack({String("Invalid Serial message: ") + data});
+    }
+  }
+  powerServos();
+}
+
+void powerServos() {
+  unsigned long curMillis = millis();
+  for (int i = 0; i < numServos; i++) {
+    if (shouldPower[i]) {
+      double lookahead = servoMaxSpeeds[i] * ((curMillis - prevMillis) / 1000);
+      double error = endTargetAngles[i] - curTargetAngles[i];
+      if (abs(error) <= .001) {
+        curTargetAngles[i] = endTargetAngles[i];
+        shouldPower[i] = false;
+      } else if (abs(error) <= lookahead) {
+        curTargetAngles[i] = endTargetAngles[i];
+      } else {
+        curTargetAngles[i] += signof(error) * lookahead;
+      }
+    }
+  }
+  prevMillis = curMillis;
+
+  int pwms[numServos];
+  mapAnglesToPwms(curTargetAngles, pwms);
+  for (int i = 0; i < numServos; i++) {
+    if (shouldPower[i]) {
+      servos[i].writeMicroseconds(pwms[i]);
     }
   }
 }
@@ -121,14 +171,30 @@ void writeBack(std::initializer_list<String> data) {
   }
 }
 
-void mapAngleToPwm(double angles[], int pwms[]) {
+void mapAnglesToPwms(double angles[], int pwms[]) {
   for (int i = 0; i < numServos; i++) {
     double a = servoMap[i][0];
     double b = servoMap[i][1];
-    double t = (angles[i] - servoMap[i][2]) / (servoMap[i][3] - servoMap[i][2]);
+    double t = calcLerpT(angles[i], servoMap[i][2], servoMap[i][3]);
     t = constrain(t, 0, 1);
-    pwms[i] = (int)(a + (b - a) * t);
+    pwms[i] = (int)lerp(a, b, t);
   }
+}
+
+double lerp(double a, double b, double t) {
+  return a + (b - a) * t;
+}
+double calcLerpT(double n, double a, double b) {
+  return (n - a) / (b - a);
+}
+int signof(double n) {
+  if (n > 0) {
+    return 1;
+  }
+  if (n < 0) {
+    return -1;
+  }
+  return 0;
 }
 
 int indexOf(int n, const int list[], int size) {

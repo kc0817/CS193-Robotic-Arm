@@ -1,6 +1,4 @@
-import serial
-import serial.tools.list_ports
-from serial.serialutil import SerialException
+from serial_io import SerialIO
 
 ARDUINO_VID = 0x2341
 joint_names = ["g", "wr", "wp", "e", "s", "t"]
@@ -10,10 +8,17 @@ serial_io = SerialIO(ARDUINO_VID, joint_names)
 
 
 while True:
-    print("COMMANDS: stop, ch_port <from> <to>, " +", ".join(joint_names))
+    cmd_list_str = "COMMANDS: start, stop, ch_port <from> <to>, "
+    for name in joint_names:
+        cmd_list_str += name + " <angle>, "
+    print(cmd_list_str)
+
     cmd = input(">")
 
-    if cmd == "stop":
+    if cmd == "start":
+        serial_io.write_start()
+    elif cmd == "stop":
+        serial_io.write_stop()
         break
     elif len(cmd) >= 7 and cmd[:7] == "ch_port":
         data = cmd.split(" ")
