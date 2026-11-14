@@ -29,7 +29,7 @@ Build, wire, and program this arm to lift objects up to 100 grams in weight
 - For Windows, install uv with: `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
 - For Mac/Linux, install uv with: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 - cd into the root folder and type `uv sync`
-- from root folder, run `uv run python python/main.py` to start program
+- from root folder, run `uv run python python/cmd_line_main.py` to start program
 
 ## Usage
 There are 3 different command types to control this arm:
