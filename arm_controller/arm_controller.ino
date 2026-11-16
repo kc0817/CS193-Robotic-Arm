@@ -1,5 +1,6 @@
 #include <Servo.h>
 #include <initializer_list>
+#include <cmath>
 
 const int numServos = 7;
 const int shoulder2Index = 5;
@@ -15,32 +16,34 @@ String names[numServos] {
   String("shoulder2"), 
   String("turret")
 };
-int pins[numServos] = {8, 3, 4, 5, 6, 7, 2}; // TODO: FILL THESE OUT PROPERLY
+int pins[numServos] = {3, 4, 5, 6, 7, 8, 9}; // TODO: FILL THESE OUT PROPERLY
 int servoMap[numServos][4] = {
   {1000, 1590, 0, 1}, // grabber
   {560, 2350, -82, 82}, // wrist roll
   {560, 2350, -105, 60 }, // wrist pitch
   {560, 2350, -82, 82}, // elbow
   {560, 2350, -82, 82}, // shoulder 1 4 is actually 0  
-  {560, 2340, -82, 82}, // shoulder 2 already centered
+  {565, 2345, -82, 82}, // shoulder 2 already centered
   {560, 2350, -82, 82} // turret
 }; // range of turret: -82.04 to +82.04
 
 // measured in degrees/sec
 int servoMaxSpeeds[numServos] = {
   -1,
-  270,
-  180,
-  180,
   90,
   90,
+  45,
+  45,
+  45,
   90
 };
 
 bool shouldPower[numServos] = {true, true, true, true, true, true, true};
 double endTargetAngles[numServos] = {0, 0, 0, 0, 0, 0, 0};
 double curTargetAngles[numServos] = {0, 0, 0, 0, 0, 0, 0}; // assumed current angles
-unsigned long prevMillis;
+double lookaheads[numServos] = {0, 0, 0, 0, 0, 0, 0};
+unsigned long prevMicros;
+const double TIME_STEP = .0083;
 
 void setup() {
   Serial.begin(9600);
@@ -49,7 +52,7 @@ void setup() {
   }
 
   // initiating servos to zero positions
-  prevMillis = millis();
+  prevMicros = micros();
   powerServos();
 }
 
@@ -57,7 +60,18 @@ void loop() {
   if (Serial.available() > 0) {
     String data = Serial.readStringUntil('\n');
 
-    if (data == "start") {
+    if (data == "get_angles") {
+      String curTargets = "";
+      String endTargets = "";
+      String la = "";
+      for (int i = 0; i < numServos; i++) {
+        curTargets += curTargetAngles[i] + String(", ");
+        endTargets += (std::round(endTargetAngles[i]*10)/10.) + String(", ");
+        la += lookaheads[i] + String(", ");
+      }
+      writeBack({curTargets, endTargets, la});
+    }
+    else if (data == "start") {
       enabled = true;
       writeBack({String("Arm enabled")});
     } 
@@ -122,6 +136,8 @@ void loop() {
           data = data.substring(endI+1);
         }
       }
+
+      // powerServosRaw(endTargetAngles);
       
       String angleStr = String("angles: ");
       String powerStr = String("should power: ");
@@ -138,25 +154,39 @@ void loop() {
 }
 
 void powerServos() {
-  unsigned long curMillis = millis();
+  unsigned long curMicros = micros();
+  float dt = (curMicros - prevMicros) / 1e6;
+  if (dt < TIME_STEP) {
+    return;
+  }
+  prevMicros = curMicros;
   for (int i = 0; i < numServos; i++) {
     if (shouldPower[i]) {
-      double lookahead = servoMaxSpeeds[i] * ((curMillis - prevMillis) / 1000);
-      double error = endTargetAngles[i] - curTargetAngles[i];
-      if (abs(error) <= .001) {
+      if (servoMaxSpeeds[i] <= 0) {
         curTargetAngles[i] = endTargetAngles[i];
-        shouldPower[i] = false;
-      } else if (abs(error) <= lookahead) {
+      }
+      float lookahead = servoMaxSpeeds[i] * dt;
+      lookaheads[i] = lookahead;
+      double error = endTargetAngles[i] - curTargetAngles[i];
+      if (abs(error) <= lookahead) {
         curTargetAngles[i] = endTargetAngles[i];
       } else {
         curTargetAngles[i] += signof(error) * lookahead;
       }
     }
   }
-  prevMillis = curMillis;
 
+  powerServosRaw(curTargetAngles);
+
+  for (int i = 0; i < numServos; i++) {
+    if (shouldPower[i] && abs(endTargetAngles[i] - curTargetAngles[i]) < .001) {
+      shouldPower[i] = false;
+    }
+  }
+}
+void powerServosRaw(const double angles[]) {
   int pwms[numServos];
-  mapAnglesToPwms(curTargetAngles, pwms);
+  mapAnglesToPwms(angles, pwms);
   for (int i = 0; i < numServos; i++) {
     if (shouldPower[i]) {
       servos[i].writeMicroseconds(pwms[i]);
@@ -171,7 +201,7 @@ void writeBack(std::initializer_list<String> data) {
   }
 }
 
-void mapAnglesToPwms(double angles[], int pwms[]) {
+void mapAnglesToPwms(const double angles[], int pwms[]) {
   for (int i = 0; i < numServos; i++) {
     double a = servoMap[i][0];
     double b = servoMap[i][1];
@@ -181,13 +211,13 @@ void mapAnglesToPwms(double angles[], int pwms[]) {
   }
 }
 
-double lerp(double a, double b, double t) {
+double lerp(const double a, const double b, const double t) {
   return a + (b - a) * t;
 }
-double calcLerpT(double n, double a, double b) {
+double calcLerpT(const double n, const double a, const double b) {
   return (n - a) / (b - a);
 }
-int signof(double n) {
+int signof(const double n) {
   if (n > 0) {
     return 1;
   }
@@ -197,7 +227,7 @@ int signof(double n) {
   return 0;
 }
 
-int indexOf(int n, const int list[], int size) {
+int indexOf(const int n, const int list[], const int size) {
   for (int i = 0; i < size; i++) {
     if (list[i] == n) {
       return i;

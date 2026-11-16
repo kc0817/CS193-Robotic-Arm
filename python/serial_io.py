@@ -20,6 +20,8 @@ class SerialIO:
         if self.port == None:
             raise RuntimeError("No port found")
 
+    def write_get_angles(self):
+        self.port.write(b"get_angles\n")
     def write_stop(self):
         self.port.write(b"stop\n")
     def write_start(self):

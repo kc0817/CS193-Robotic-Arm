@@ -32,10 +32,11 @@ Build, wire, and program this arm to lift objects up to 100 grams in weight
 - from root folder, run `uv run python python/cmd_line_main.py` to start program
 
 ## Usage
-There are 3 different command types to control this arm:
-- `help` (lists all valid commands)
-- `stop` (stops the arm)
-- `<joint_id> <target_angle>`, where joint_id is one of the following: `t`, `s`, `e`, `w1`, `w2`, `g`, (which corresponds to turret, shoulder, elbow, wrist1, wrist2, grabber) and target_angle is the desired target_angle of the joint
+There are 3 different command types to control this arm through the command line:
+- `start`: enables servo move commands
+- `stop`: disables servo move commands
+- `ch_port <from> <to>`: moves servo port
+- `<joint_name> <target_angle>`: moves servo, where joint_name is one of the following: `t`, `s`, `e`, `wr`, `wp`, `g`, (which corresponds to turret, shoulder, elbow, wrist roll, wrist pitch, grabber) and target_angle is the desired target_angle of the joint
 
 ## Author
 Kevin Chen, https://github.com/kc0817

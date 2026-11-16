@@ -15,7 +15,10 @@ while True:
 
     cmd = input(">")
 
-    if cmd == "start":
+    data_sent = True
+    if cmd == "get_angles":
+        serial_io.write_get_angles()
+    elif cmd == "start":
         serial_io.write_start()
     elif cmd == "stop":
         serial_io.write_stop()
@@ -24,16 +27,19 @@ while True:
         data = cmd.split(" ")
         if len(data) != 3:
             print("Invalid command: " + cmd)
+            data_sent = False
         try:
             from_port = int(data[1])
             to_port = int(data[2])
             serial_io.write_change_port(from_port, to_port)
         except ValueError:
             print("Invalid command: " + cmd)
+            data_sent = False
     else:
         data = cmd.split(" ")
         if len(data) != 2:
             print("Invalid command: " + cmd)
+            data_sent = False
         else:
             try:
                 angle = float(data[1])
@@ -47,5 +53,7 @@ while True:
                 serial_io.write_move_joints(angles_list)
             except ValueError:
                 print("Invalid command: " + cmd)
+                data_sent = False
     
-    serial_io.print_response()
+    if data_sent:
+        serial_io.print_response()
