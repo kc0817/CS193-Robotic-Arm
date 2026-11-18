@@ -18,7 +18,7 @@ String names[numServos] {
 };
 int pins[numServos] = {3, 4, 5, 6, 7, 8, 9}; // TODO: FILL THESE OUT PROPERLY
 int servoMap[numServos][4] = {
-  {1000, 1590, 0, 1}, // grabber
+  {1000, 1750, 0, 1}, // grabber
   {560, 2350, -82, 82}, // wrist roll
   {560, 2350, -105, 60 }, // wrist pitch
   {560, 2350, -82, 82}, // elbow
@@ -30,13 +30,14 @@ int servoMap[numServos][4] = {
 // measured in degrees/sec
 int servoMaxSpeeds[numServos] = {
   -1,
-  90,
-  90,
+  -1,
+  150,
+  70,
   45,
   45,
-  45,
-  90
+  150
 };
+double speedPercentage = 1;
 
 bool shouldPower[numServos] = {true, true, true, true, true, true, true};
 double endTargetAngles[numServos] = {0, 0, 0, 0, 0, 0, 0};
@@ -53,7 +54,7 @@ void setup() {
 
   // initiating servos to zero positions
   prevMicros = micros();
-  powerServos();
+  powerServosRaw(endTargetAngles);
 }
 
 void loop() {
@@ -71,17 +72,21 @@ void loop() {
       }
       writeBack({curTargets, endTargets, la});
     }
+    
     else if (data == "start") {
       enabled = true;
       writeBack({String("Arm enabled")});
     } 
+    
     else if (data == "stop") {
       enabled = false;
       writeBack({String("Arm disabled")});
     } 
+    
     else if (!enabled) {
       writeBack({String("Arm current disabled")});
     } 
+    
     else if (data.length() >= 7 && data.substring(0, 7) == "ch_port") {
       int portSeparator = data.indexOf(" ", 8);
       if (portSeparator == -1) {
@@ -112,7 +117,14 @@ void loop() {
       pins[servoI] = toPort;
       writeBack({String("Port move successful")});
   
-    } else if (data.length() >= 4 && data.substring(0, 4) == "move") {
+    } 
+
+    else if (data.length() >= 5 && data.substring(0, 5) == "speed") {
+      speedPercentage = constrain(data.substring(6).toDouble(), 0, 1);
+      writeBack({String("Set speed to ") + speedPercentage});
+    }
+
+    else if (data.length() >= 4 && data.substring(0, 4) == "move") {
       data = data.substring(5);
 
       for (int i = 0; i < numServos; i++) {
@@ -165,7 +177,7 @@ void powerServos() {
       if (servoMaxSpeeds[i] <= 0) {
         curTargetAngles[i] = endTargetAngles[i];
       }
-      float lookahead = servoMaxSpeeds[i] * dt;
+      float lookahead = servoMaxSpeeds[i] * speedPercentage * dt;
       lookaheads[i] = lookahead;
       double error = endTargetAngles[i] - curTargetAngles[i];
       if (abs(error) <= lookahead) {

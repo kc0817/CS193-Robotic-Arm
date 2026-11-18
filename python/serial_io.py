@@ -27,6 +27,9 @@ class SerialIO:
     def write_start(self):
         self.port.write(b"start\n")
     
+    def write_speed(self, speed):
+        self.port.write(("speed " + str(speed) + "\n").encode())
+    
     def write_change_port(self, from_port: int, to_port: int):
         self.port.write(("ch_port " + str(from_port) + " " + str(to_port) + "\n").encode())
     
