@@ -19,6 +19,7 @@ w_link_len = float(os.getenv("WRIST_LINK_LENGTH"))
 
 target_pos = np.array([0, 0, 5])
 target_pitch = 0
+grabber_state = 0
 
 pygame.init()
 pygame.joystick.init()
@@ -27,6 +28,7 @@ gamepad = None
 joystick_deadband_sqrd = .01
 
 prev_nanos = time.time_ns()
+prev_button0 = False
 
 while True:
     cur_nanos = time.time_ns()
@@ -38,13 +40,15 @@ while True:
         if event.type == pygame.JOYDEVICEADDED:
             print("gamepad found")
             gamepad = pygame.joystick.Joystick(event.device_index)
-            print(gamepad.get_name())
-            print(gamepad.get_power_level())
-            print(gamepad.get_guid())
         
     if gamepad is not None:
         if gamepad.get_button(0):
-            print("a button pressed")
+            if not prev_button0:
+                prev_button0 = True
+                grabber_state = 0 if grabber_state == 1 else 1
+        else:
+            prev_button0 = False
+        
         lx = gamepad.get_axis(0)
         ly = -gamepad.get_axis(1)
 
