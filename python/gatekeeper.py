@@ -1,8 +1,10 @@
+import math
 import os
 import threading
 
 import numpy as np
 from dotenv import load_dotenv
+from ikpy.chain import Chain
 from input_functions import *
 from serial_io import SerialIO
 
@@ -14,7 +16,7 @@ s_link_len = float(os.getenv("SHOULDER_LINK_LENGTH"))
 e_link_len = float(os.getenv("ELBOW_LINK_LENGTH"))
 w_link_len = float(os.getenv("WRIST_LINK_LENGTH"))
 
-target_pos = np.array([0, 0, 5])
+target_pos = np.array([0, 0, .4070], dtype=np.float32)
 target_pitch = 0
 grabber_state = 0
 
@@ -22,24 +24,29 @@ ARDUINO_VID = 0x2341
 joint_names = ["g", "wr", "wp", "e", "s", "t"]
 joint_targets = [0, 0, 0, 0, 0, 0] 
 
-serial_io = SerialIO(ARDUINO_VID, joint_names, enabled=False)
+chain = Chain.from_urdf_file("arm.urdf")
+
+serial_io = SerialIO(ARDUINO_VID, joint_names, enabled=True)
 
 terminal_thread = threading.Thread(target=read_terminal_input, daemon=True)
 terminal_thread.start()
 
 gamepad_thread = threading.Thread(target=read_gamepad_input, daemon=True)
+# gamepad_thread.start()
 
 while True:
     data = cmd_q.get()
     origin = data[0]
     cmd = data[1]
     args = data[2]
-    print("args: " + str(args))
 
     error = None
 
     data_sent = True
-    if cmd == "get_angles":
+    if cmd == "raw":
+        arg_str = " ".join(arg for arg in args)
+        serial_io.write_raw(arg_str)
+    elif cmd == "get_angles":
         serial_io.write_get_angles()
     elif cmd == "start":
         serial_io.write_start()
@@ -73,14 +80,13 @@ while True:
         else:
             try:
                 angle = float(args[1])
-                angles_list = []
-                for name in joint_names:
-                    if name == args[0]:
-                        angles_list = (angle)
-                    else:
-                        angles_list = (None)
-                
-                serial_io.write_move_joints(angles_list)
+                index = joint_names.index(args[0])
+                if index == -1:
+                    error = "Invalid move angle args: " + str(args)
+                else:
+                    angles_list = [(angle if i == index else None) for i in range(len(joint_names))]
+                    joint_targets[index] = angle
+                    serial_io.write_move_joints(angles_list)
             except ValueError:
                 error = ("Invalid move angle args: " + str(args))
                 
@@ -88,14 +94,21 @@ while True:
         if len(args) != 4:
             error = "Invalid move coord args: " + str(args)
         else:
-            disp = np.array(args)
+            disp = np.array(args, dtype=np.float32)
             target_pos += disp[:3]
             target_pitch += disp[3]
 
             # TODO: calculate target angles 
-            angles_list = []
-
-            seiral_io.write_move_joints(angles_list)
+            print("target pos:" + str(target_pos))
+            angles_list_rad = [a * math.pi/180 for a in joint_targets]
+            result = chain.inverse_kinematics(
+                target_position=target_pos,
+                initial_position=angles_list_rad)
+            print(result)
+            angles_list = [result[5-i] for i in range(5)]
+            angles_list = [angle * 180/math.pi for angle in angles_list]
+            angles_list.insert(0, None)
+            serial_io.write_move_joints(angles_list)
     else:
         error = "Unrecognized command: " + cmd
     

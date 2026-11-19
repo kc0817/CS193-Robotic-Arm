@@ -24,6 +24,9 @@ class SerialIO:
         else:
             print("Serial IO disabled")
 
+    def write_raw(self, cmd):
+        self.port.write((cmd + "\n").encode())
+
     def write_get_angles(self):
         if self.enabled:
             self.port.write(b"get_angles\n")
