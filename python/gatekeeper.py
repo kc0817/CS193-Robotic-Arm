@@ -4,6 +4,7 @@ import threading
 
 import numpy as np
 from dotenv import load_dotenv
+from helpers import reorder_by_urdf
 from ikpy.chain import Chain
 from input_functions import *
 from serial_io import SerialIO
@@ -21,12 +22,13 @@ target_pitch = 0
 grabber_state = 0
 
 ARDUINO_VID = 0x2341
+urdf_joint_order = ["t", "s", "e", "wp", "wr", "g"]
 joint_names = ["g", "wr", "wp", "e", "s", "t"]
 joint_targets = [0, 0, 0, 0, 0, 0] 
 
 chain = Chain.from_urdf_file("arm.urdf")
 
-serial_io = SerialIO(ARDUINO_VID, joint_names, enabled=True)
+serial_io = SerialIO(ARDUINO_VID, enabled=True)
 
 terminal_thread = threading.Thread(target=read_terminal_input, daemon=True)
 terminal_thread.start()
@@ -98,9 +100,9 @@ while True:
             target_pos += disp[:3]
             target_pitch += disp[3]
 
-            # TODO: calculate target angles 
+            # TODO: calculate target angles a
             print("target pos:" + str(target_pos))
-            angles_list_rad = [a * math.pi/180 for a in joint_targets]
+            angles_list_rad = [a * math.pi/180 for a in reorder_by_urdf(joint_names, joint_targets)]
             result = chain.inverse_kinematics(
                 target_position=target_pos,
                 initial_position=angles_list_rad)

@@ -4,9 +4,8 @@ from serial.serialutil import SerialException
 
 
 class SerialIO:
-    def __init__(self, VID: int, joint_abbs: list[str], enabled=True):
+    def __init__(self, VID: int, enabled=True):
         self.port = None
-        self.joint_abbs = joint_abbs
         self.enabled = enabled
 
         if self.enabled:
@@ -53,6 +52,12 @@ class SerialIO:
                     out_str += str(angle)
                 out_str += ","
             self.port.write((out_str + "\n").encode())
+        
+    def write_labeled_move_joints(self, names: list[float], angles: list[float]):
+        out_str = "label_move "
+        for i in range(len(names)):
+            out_str += names[i] + " " + str(angles[i]) + ","
+        self.port.write((out_str + "\n").encode())
     
     def get_response(self) -> list[str]:
         if self.enabled:
