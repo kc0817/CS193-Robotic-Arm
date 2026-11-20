@@ -4,6 +4,7 @@ import threading
 
 import numpy as np
 from dotenv import load_dotenv
+from helpers import calc_fk, to_deg, to_rad
 from ikpy.chain import Chain
 from input_functions import *
 from serial_io import SerialIO
@@ -11,14 +12,6 @@ from serial_io import SerialIO
 load_dotenv()
 set_dt = 1 / float(os.getenv("FPS"))
 
-s_pos = np.array([float(os.getenv("SHOULDER_X")), float(os.getenv("SHOULDER_Y")), float(os.getenv("SHOULDER_Z"))])
-s_link_len = float(os.getenv("SHOULDER_LINK_LENGTH"))
-e_link_len = float(os.getenv("ELBOW_LINK_LENGTH"))
-w_link_len = float(os.getenv("WRIST_LINK_LENGTH"))
-
-target_pos = np.array([0, 0, .4070], dtype=np.float32)
-target_pitch = 0
-grabber_state = 0
 
 ARDUINO_VID = 0x2341
 # urdf_joint_order = ["t", "s", "e", "wp", "wr", "g"]
@@ -27,6 +20,13 @@ joint_targets = [0, 0, 0, 0, 0, 0]
 home_pos = [0, 0, 0, 0, 0, 0]
 
 chain = Chain.from_urdf_file("arm.urdf")
+
+total_z = 0
+for link in chain.links[1:]:
+    total_z += link.origin_translation[2]
+target_pos = np.array([0, 0, total_z], dtype=np.float32)
+target_pitch = 90
+grabber_state = 0
 
 serial_io = SerialIO(ARDUINO_VID, enabled=True)
 
@@ -49,7 +49,7 @@ while True:
         arg_str = " ".join(arg for arg in args)
         serial_io.write_raw(arg_str)
     elif cmd == "get_angles":
-        serial_io.write_get_angles()
+        error = str(joint_targets)
     elif cmd == "start":
         serial_io.write_start()
     elif cmd == "stop":
@@ -66,6 +66,11 @@ while True:
             except ValueError:
                 error = ("Invalid change port args: " + str(args))
     elif cmd == "home":
+        joint_targets = home_pos
+        # updating end effector position
+        pos, pitch = calc_fk(chain, joint_targets)
+        target_pos = pos.tolist()
+        target_pitch = pitch
         serial_io.write_move_joints(home_pos)
     elif cmd == "speed":
         if len(args) != 1:
@@ -88,10 +93,22 @@ while True:
                 else:
                     angles_list = [(angle if i == index else None) for i in range(len(joint_names))]
                     joint_targets[index] = angle
+                    
+                    # updating end effector position
+                    pos, pitch = calc_fk(chain, joint_targets)
+                    target_pos = pos.tolist()
+                    target_pitch = pitch
+
                     serial_io.write_move_joints(angles_list)
+
             except ValueError:
                 error = ("Invalid move angle args: " + str(args))
                 
+    elif cmd == "calc_cur_coord":
+        pos, pitch = calc_fk(chain, joint_targets)
+        error = "target: " + str(target_pos) + ", " + str(target_pitch) + " \nfk: (" + str(pos[0]) + ", " +  str(pos[1]) + ", " + str(pos[2]) + ", " + str(to_deg(pitch))
+
+
     elif cmd == "move_coord":
         if len(args) != 4:
             error = "Invalid move coord args: " + str(args)
@@ -100,15 +117,21 @@ while True:
             target_pos += disp[:3]
             target_pitch += disp[3]
 
-            # TODO: calculate target angles a
-            print("target pos:" + str(target_pos))
-            angles_list_rad = [joint_targets[i] * math.pi/180 for i in range(len(joint_targets)-1)] # don't include grabber state
+            angles_list_rad = [to_rad(joint_targets[i]) for i in range(len(joint_targets)-1)] # don't include grabber state
             angles_list_rad.insert(0, False)
             angles_list_rad.append(False)
+            pitch_rad = to_rad(target_pitch)
+            turret_rad = to_rad(joint_targets[0])
+            direction = [
+                math.cos(pitch_rad) * math.cos(turret_rad),
+                math.cos(pitch_rad) * math.sin(turret_rad),
+                math.sin(pitch_rad)
+            ]
             result = chain.inverse_kinematics(
                 target_position=target_pos,
-                initial_position=angles_list_rad)
-            print(result)
+                initial_position=angles_list_rad,
+                orientation_mode="Z",
+                target_orientation=direction)
             angles_list = [result[i] * 180/math.pi for i in range(1, len(result)-1)]
             angles_list.append(joint_targets[len(joint_targets)-1])
             joint_targets = angles_list

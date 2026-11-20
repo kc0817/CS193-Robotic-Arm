@@ -22,7 +22,7 @@ int servoMap[numServos][4] = {
   {560, 2350, -82, 82}, // turret
   {560, 2350, -82, 82}, // shoulder 1 4 is actually 0  
   {565, 2345, -82, 82}, // shoulder 2 already centered
-  {560, 2350, -82, 82}, // elbow
+  {2350, 560, -82, 82}, // elbow
   {560, 2350, -105, 60 }, // wrist pitch
   {560, 2350, -82, 82}, // wrist roll
   {1000, 1750, 0, 1} // grabber
