@@ -87,4 +87,3 @@ def read_gamepad_input():
             if moved:
                 cmd_q.put(("G", "move_coord", move_cmd))
                 print_list(gamepad_response_q.get())
-            

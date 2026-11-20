@@ -50,7 +50,7 @@ d
     <joint name="grabber_tip_joint" type="fixed">
         <parent link="wrist_roll_link"/>
         <child link="grabber_tip"/>
-        <origin xyz="0 0 .0837"/>
+        <origin xyz="0 0 .1075"/>
     </joint>
 
 </robot>
