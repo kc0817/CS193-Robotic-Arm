@@ -1,0 +1,56 @@
+<robot name="timmy">
+    <link name="base_link"/>
+    <link name="turret_link"/>
+    <link name="shoulder_link"/>
+    <link name="elbow_link"/>
+    <link name="wrist_pitch_link"/>
+    <link name="wrist_roll_link"/>
+    <link name="grabber_tip"/>
+d
+    <joint name="turret_joint" type="revolute">
+        <parent link="base_link"/>
+        <child link="turret_link"/>
+        <axis xyz=" 0 0 1"/>
+        <limit lower="-1.4312" upper="1.4312" effort="1.27" velocity="6.16"/>
+        <origin xyz="0 0 .0480"/>
+    </joint>
+
+    <joint name="shoulder_joint" type="revolute">
+        <parent link="turret_link"/>
+        <child link="shoulder_link"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-1.4312" upper="1.4312" effort="1.27" velocity="6.16"/>
+        <origin xyz="0 0 .0514"/>
+    </joint>
+
+    <joint name="elbow_joint" type="revolute">
+        <parent link="shoulder_link"/>
+        <child link="elbow_link"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-1.4312" upper="1.4312" effort="1.27" velocity="6.16"/>
+        <origin xyz="0 0 .1336"/>
+    </joint>
+
+    <joint name="wrist_pitch_joint" type="revolute">
+        <parent link="elbow_link"/>
+        <child link="wrist_pitch_link"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-1.4312" upper="1.4312" effort="1.27" velocity="6.16"/>
+        <origin xyz="0 0 .0718"/>
+    </joint>
+
+    <joint name="wrist_roll_joint" type="revolute">
+        <parent link="wrist_pitch_link"/>
+        <child link="wrist_roll_link"/>
+        <axis xyz="0 0 1"/>
+        <limit lower="-1.4312" upper="1.4312" effort="1.27" velocity="6.16"/>
+        <origin xyz="0 0 .0186"/>
+    </joint>
+
+    <joint name="grabber_tip_joint" type="fixed">
+        <parent link="wrist_roll_link"/>
+        <child link="grabber_tip"/>
+        <origin xyz="0 0 .0837"/>
+    </joint>
+
+</robot>
