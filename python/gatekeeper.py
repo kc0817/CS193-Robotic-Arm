@@ -4,7 +4,6 @@ import threading
 
 import numpy as np
 from dotenv import load_dotenv
-from helpers import reorder_by_urdf
 from ikpy.chain import Chain
 from input_functions import *
 from serial_io import SerialIO
@@ -22,9 +21,10 @@ target_pitch = 0
 grabber_state = 0
 
 ARDUINO_VID = 0x2341
-urdf_joint_order = ["t", "s", "e", "wp", "wr", "g"]
-joint_names = ["g", "wr", "wp", "e", "s", "t"]
+# urdf_joint_order = ["t", "s", "e", "wp", "wr", "g"]
+joint_names = ["t", "s", "e", "wp", "wr", "g"] #["g", "wr", "wp", "e", "s", "t"]
 joint_targets = [0, 0, 0, 0, 0, 0] 
+home_pos = [0, 0, 0, 0, 0, 0]
 
 chain = Chain.from_urdf_file("arm.urdf")
 
@@ -66,7 +66,7 @@ while True:
             except ValueError:
                 error = ("Invalid change port args: " + str(args))
     elif cmd == "home":
-        serial_io.write_move_joints([0, 0, 0, 0, 0, 0])
+        serial_io.write_move_joints(home_pos)
     elif cmd == "speed":
         if len(args) != 1:
             error = ("Invalid speed args: " + str(args))
@@ -102,15 +102,17 @@ while True:
 
             # TODO: calculate target angles a
             print("target pos:" + str(target_pos))
-            angles_list_rad = [a * math.pi/180 for a in reorder_by_urdf(joint_names, joint_targets)]
+            angles_list_rad = [joint_targets[i] * math.pi/180 for i in range(len(joint_targets)-1)] # don't include grabber state
+            angles_list_rad.insert(0, False)
+            angles_list_rad.append(False)
             result = chain.inverse_kinematics(
                 target_position=target_pos,
                 initial_position=angles_list_rad)
             print(result)
-            angles_list = [result[5-i] for i in range(5)]
-            angles_list = [angle * 180/math.pi for angle in angles_list]
-            angles_list.insert(0, None)
-            serial_io.write_move_joints(angles_list)
+            angles_list = [result[i] * 180/math.pi for i in range(1, len(result)-1)]
+            angles_list.append(joint_targets[len(joint_targets)-1])
+            joint_targets = angles_list
+            serial_io.write_move_joints(joint_targets)
     else:
         error = "Unrecognized command: " + cmd
     

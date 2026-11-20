@@ -3,40 +3,40 @@
 #include <cmath>
 
 const int numServos = 7;
-const int shoulder1Index = 4;
-const int shoulder2Index = 5;
+const int shoulder1Index = 1;
+const int shoulder2Index = 2;
 bool enabled = true;
 
 Servo servos[numServos];
 String names[numServos] {
-  String("g"), 
-  String("wr"), 
-  String("wp"), 
-  String("e"), 
+  String("t"),
   String("s"), 
   String("s2"), 
-  String("t")
+  String("e"), 
+  String("wp"), 
+  String("wr"), 
+  String("g")
 };
-int pins[numServos] = {3, 4, 5, 6, 7, 8, 9}; // TODO: FILL THESE OUT PROPERLY
+int pins[numServos] = {9, 8, 7, 6, 5, 4, 3}; // TODO: FILL THESE OUT PROPERLY
 int servoMap[numServos][4] = {
-  {1000, 1750, 0, 1}, // grabber
-  {560, 2350, -82, 82}, // wrist roll
-  {560, 2350, -105, 60 }, // wrist pitch
-  {560, 2350, -82, 82}, // elbow
+  {560, 2350, -82, 82}, // turret
   {560, 2350, -82, 82}, // shoulder 1 4 is actually 0  
   {565, 2345, -82, 82}, // shoulder 2 already centered
-  {560, 2350, -82, 82} // turret
-}; // range of turret: -82.04 to +82.04
+  {560, 2350, -82, 82}, // elbow
+  {560, 2350, -105, 60 }, // wrist pitch
+  {560, 2350, -82, 82}, // wrist roll
+  {1000, 1750, 0, 1} // grabber
+};
 
 // measured in degrees/sec
 int servoMaxSpeeds[numServos] = {
-  -1,
-  -1,
   150,
+  45,
+  45,
   70,
-  45,
-  45,
-  150
+  150,
+  -1,
+  -1
 };
 double speedPercentage = 1;
 
