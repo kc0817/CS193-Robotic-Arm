@@ -25,7 +25,7 @@ int servoMap[numServos][4] = {
   {2350, 560, -82, 82}, // elbow
   {560, 2350, -105, 60 }, // wrist pitch
   {560, 2350, -82, 82}, // wrist roll
-  {1000, 1750, 0, 1} // grabber
+  {1400, 2150, 0, 1} // grabber
 };
 
 // measured in degrees/sec

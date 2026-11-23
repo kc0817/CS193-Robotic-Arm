@@ -11,6 +11,7 @@ from serial_io import SerialIO
 
 load_dotenv()
 set_dt = 1 / float(os.getenv("FPS"))
+move_coord_step = os.getenv("MOVE_COORD_STEP_SIZE")
 
 
 ARDUINO_VID = 0x2341
@@ -34,7 +35,7 @@ terminal_thread = threading.Thread(target=read_terminal_input, daemon=True)
 terminal_thread.start()
 
 gamepad_thread = threading.Thread(target=read_gamepad_input, daemon=True)
-# gamepad_thread.start()
+gamepad_thread.start()
 
 while True:
     data = cmd_q.get()
@@ -66,7 +67,7 @@ while True:
             except ValueError:
                 error = ("Invalid change port args: " + str(args))
     elif cmd == "home":
-        joint_targets = home_pos
+        joint_targets = home_pos.copy()
         # updating end effector position
         pos, pitch = calc_fk(chain, joint_targets)
         target_pos = pos.tolist()
@@ -112,6 +113,11 @@ while True:
     elif cmd == "move_coord":
         if len(args) != 4:
             error = "Invalid move coord args: " + str(args)
+        # elif 2 - 1 == 1:
+        #     disp = np.array(args, dtype=np.float32)
+        #     target_pos += disp[:3]
+        #     target_pitch += disp[3]
+        #     error = str(target_pos) + ", " + str(target_pitch)
         else:
             disp = np.array(args, dtype=np.float32)
             target_pos += disp[:3]

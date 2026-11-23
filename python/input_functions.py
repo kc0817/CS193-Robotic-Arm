@@ -28,6 +28,8 @@ def read_gamepad_input():
     set_dt = 1 / float(os.getenv("FPS"))
     max_pos_speed = float(os.getenv("MAX_POS_SPEED"))
     max_pitch_speed = float(os.getenv("MAX_PITCH_SPEED"))
+    print("max_pos speed: ", max_pos_speed)
+    print("max pitch speed: ", max_pitch_speed)
     
     pygame.init()
     pygame.joystick.init()
@@ -77,13 +79,18 @@ def read_gamepad_input():
                 moved = True
             
             # TODO: find correct dpad codes
-            if gamepad.get_button(1):
-                move_cmd[3] = max_pitch_speed * dt
+            _, hy = gamepad.get_hat(0)
+            if hy != 0:
+                move_cmd[3] = hy * max_pitch_speed * dt
                 moved = True
-            elif gamepad.get_button(2):
-                move_cmd[3] = -max_pitch_speed * dt
-                moved = True
-            
+
             if moved:
                 cmd_q.put(("G", "move_coord", move_cmd))
-                print_list(gamepad_response_q.get())
+                try:
+                    print_list(gamepad_response_q.get(timeout=1))
+                except queue.Empty:
+                    print("no response")
+                    break
+
+if __name__ == "__main__":
+    read_gamepad_input()
