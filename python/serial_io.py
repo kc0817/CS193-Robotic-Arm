@@ -44,6 +44,11 @@ class SerialIO:
         if self.enabled:
             self.port.write(("ch_port " + str(from_port) + " " + str(to_port) + "\n").encode())
     
+    def write_check_grabber_current(self):
+        self.port.write(b"check_grabber_current\n")
+    def write_grabber_current_close(self):
+        self.port.write(b"gc\n")
+
     def write_move_joints(self, angles: list[float | None]):
         if self.enabled:
             out_str = "move "
