@@ -35,7 +35,7 @@ terminal_thread = threading.Thread(target=read_terminal_input, daemon=True)
 terminal_thread.start()
 
 gamepad_thread = threading.Thread(target=read_gamepad_input, daemon=True)
-gamepad_thread.start()
+# gamepad_thread.start()
 
 while True:
     data = cmd_q.get()
@@ -82,25 +82,28 @@ while True:
             except ValueError:
                 error = ("Invalid speed args: " + str(args))
             
-    elif cmd == "move_angle":
-        if len(args) != 2 or args[0] not in joint_names:
+    elif cmd in joint_names:
+        if len(args) != 1 and len(args) != 2:
             error = ("Invalid move angle args: " + str(args))
         else:
+            absolute_angle = False
+            if len(args) == 2:
+                absolute_angle = args[1] == "abs"
             try:
-                angle = float(args[1])
-                index = joint_names.index(args[0])
-                if index == -1:
-                    error = "Invalid move angle args: " + str(args)
-                else:
-                    angles_list = [(angle if i == index else None) for i in range(len(joint_names))]
-                    joint_targets[index] = angle
-                    
-                    # updating end effector position
-                    pos, pitch = calc_fk(chain, joint_targets)
-                    target_pos = pos.tolist()
-                    target_pitch = pitch
+                # updating target angle
+                index = joint_names.index(cmd)
+                print(index)
+                print(args[0])
+                angle = float(args[0]) + (0 if absolute_angle else joint_targets[index])
+                angles_list = [(angle if i == index else None) for i in range(len(joint_names))]
+                joint_targets[index] = angle
+                
+                # updating end effector position
+                pos, pitch = calc_fk(chain, joint_targets)
+                target_pos = pos.tolist()
+                target_pitch = pitch
 
-                    serial_io.write_move_joints(angles_list)
+                serial_io.write_move_joints(angles_list)
 
             except ValueError:
                 error = ("Invalid move angle args: " + str(args))
