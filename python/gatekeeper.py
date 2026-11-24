@@ -1,18 +1,19 @@
 import math
 import os
 import threading
+import time
 
 import numpy as np
 from dotenv import load_dotenv
-from helpers import calc_fk, to_deg, to_rad
+from helpers import calc_fk, to_rad
 from ikpy.chain import Chain
 from input_functions import *
 from serial_io import SerialIO
 
 load_dotenv()
 set_dt = 1 / float(os.getenv("FPS"))
-move_coord_step = os.getenv("MOVE_COORD_STEP_SIZE")
-
+move_pos_step = float(os.getenv("MOVE_COORD_POS_STEP_SIZE"))
+move_pitch_step = float(os.getenv("MOVE_COORD_PITCH_STEP_SIZE"))
 
 ARDUINO_VID = 0x2341
 # urdf_joint_order = ["t", "s", "e", "wp", "wr", "g"]
@@ -113,7 +114,7 @@ while True:
                 
     elif cmd == "calc_cur_coord":
         pos, pitch = calc_fk(chain, joint_targets)
-        error = "target: " + str(target_pos) + ", " + str(target_pitch) + " \nfk: (" + str(pos[0]) + ", " +  str(pos[1]) + ", " + str(pos[2]) + ", " + str(to_deg(pitch))
+        error = "target: " + str(target_pos) + ", " + str(target_pitch) + " \nfk: (" + str(pos[0]) + ", " +  str(pos[1]) + ", " + str(pos[2]) + ", " + str(pitch)
 
 
     elif cmd == "move_coord":
@@ -125,29 +126,54 @@ while True:
         #     target_pitch += disp[3]
         #     error = str(target_pos) + ", " + str(target_pitch)
         else:
-            disp = np.array(args, dtype=np.float32)
-            target_pos += disp[:3]
-            target_pitch += disp[3]
+            error = "overriding normal comms protocol: "
 
-            angles_list_rad = [to_rad(joint_targets[i]) for i in range(len(joint_targets)-1)] # don't include grabber state
-            angles_list_rad.insert(0, False)
-            angles_list_rad.append(False)
-            pitch_rad = to_rad(target_pitch)
-            turret_rad = to_rad(joint_targets[0])
-            direction = [
-                math.cos(pitch_rad) * math.cos(turret_rad),
-                math.cos(pitch_rad) * math.sin(turret_rad),
-                math.sin(pitch_rad)
-            ]
-            result = chain.inverse_kinematics(
-                target_position=target_pos,
-                initial_position=angles_list_rad,
-                orientation_mode="Z",
-                target_orientation=direction)
-            angles_list = [result[i] * 180/math.pi for i in range(1, len(result)-1)]
-            angles_list.append(joint_targets[len(joint_targets)-1])
-            joint_targets = angles_list
-            serial_io.write_move_joints(joint_targets)
+            disp = np.array(args, dtype=np.float32)
+            total_pos_disp = disp[:3]
+            pos_norm = total_pos_disp / np.linalg.norm(total_pos_disp)
+            total_pitch_disp = disp[3]
+            pitch_norm = total_pitch_disp / abs(total_pitch_disp) if abs(total_pitch_disp) > .0001 else 0
+            end_target_pos = target_pos + total_pos_disp
+            end_target_pitch = target_pitch + total_pitch_disp
+            # target_pos += disp[:3]
+            # target_pitch += disp[3]
+            i = 0
+            pos_iters = math.ceil(float(np.max(np.abs(total_pos_disp))) / move_pos_step)
+            pitch_iters = math.ceil(float(total_pitch_disp) / move_pitch_step)
+            while i < max(pos_iters, pitch_iters):
+                # calculating current targets
+                pos_error = np.linalg.norm(target_pos - end_target_pos)
+                target_pos += pos_norm * min(move_pos_step, pos_error)
+                pitch_error = abs(target_pitch - end_target_pitch)
+                target_pitch += pitch_norm * min(move_pitch_step, pitch_error)
+
+                # preparing inputs for ik solve
+                angles_list_rad = [to_rad(joint_targets[i]) for i in range(len(joint_targets)-1)] # don't include grabber state
+                angles_list_rad.insert(0, False)
+                angles_list_rad.append(False)
+                pitch_rad = to_rad(target_pitch)
+                turret_rad = to_rad(joint_targets[0])
+                direction = [
+                    math.cos(pitch_rad) * math.cos(turret_rad),
+                    math.cos(pitch_rad) * math.sin(turret_rad),
+                    math.sin(pitch_rad)
+                ]
+                # print("target: " + str(target_pos) + ", " + str(target_pitch))
+                # print("angle list rad: " + str(angles_list_rad))
+                result = chain.inverse_kinematics(
+                    target_position=target_pos,
+                    initial_position=angles_list_rad,
+                    orientation_mode="Z", # which axis to align to the target orientation in the end effector frame
+                    target_orientation=direction)
+                angles_list = [result[i] * 180/math.pi for i in range(1, len(result)-1)]
+                angles_list.append(joint_targets[len(joint_targets)-1])
+                joint_targets = angles_list
+                serial_io.write_move_joints(joint_targets)
+                error += "\n" + str(serial_io.get_response())
+                time.sleep(1)
+                i += 1
+
+            
     else:
         error = "Unrecognized command: " + cmd
     
