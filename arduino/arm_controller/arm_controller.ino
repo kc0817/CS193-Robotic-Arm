@@ -6,6 +6,7 @@
 const int numServos = 7;
 const int shoulder1Index = 1;
 const int shoulder2Index = 2;
+const int grabberI = 6;
 bool enabled = true;
 
 Servo servos[numServos];
@@ -40,29 +41,28 @@ int servoMaxSpeeds[numServos] = {
   -1
 };
 float speedPercentage = 1;
-int grabberI = -1;
+
+
 Adafruit_INA219 currentSensor;
 bool currentSensorFound = false;
+const float graspCurrentThreshold_mA = 100; // TODO: tune this
+bool grabberClosing = false;
+const float grabberClosingSpeed = .5;
+float grabberCurrent = 0;
 
 bool shouldPower[numServos] = {true, true, true, true, true, true, true};
 float endTargetAngles[numServos] = {0, 0, 0, 0, 0, 0, 0};
 float curTargetAngles[numServos] = {0, 0, 0, 0, 0, 0, 0}; // assumed current angles
-float lookaheads[numServos] = {0, 0, 0, 0, 0, 0, 0};
 unsigned long prevMicros;
 const float TIME_STEP = .0083;
 
 void setup() {
   Serial.begin(9600);
+
   for (int i = 0; i < numServos; i++) {
     servos[i].attach(pins[i]);
   }
 
-  for (int i = 0; i < numServos; i++) {
-    if (names[i] == "g") {
-      grabberI = i;
-      break;
-    }
-  }
   currentSensorFound = currentSensor.begin();
   if (currentSensorFound) {
     currentSensor.setCalibration_32V_1A();
@@ -74,23 +74,18 @@ void setup() {
 }
 
 void loop() {
+  grabberCurrent = currentSensor.getCurrent_mA();
   if (Serial.available() > 0) {
     String data = Serial.readStringUntil('\n');
 
-    if (grabberI == -1) {
-      writeBack({String("cannot find grabber")});
-    }
-
-    else if (data == "get_angles") {
+    if (data == "get_angles") {
       String curTargets = "";
       String endTargets = "";
-      String la = "";
       for (int i = 0; i < numServos; i++) {
         curTargets += curTargetAngles[i] + String(", ");
         endTargets += (std::round(endTargetAngles[i]*10)/10.) + String(", ");
-        la += lookaheads[i] + String(", ");
       }
-      writeBack({curTargets, endTargets, la});
+      writeBack({curTargets, endTargets});
     }
     
     else if (data == "start") {
@@ -142,6 +137,21 @@ void loop() {
     else if (data.length() >= 5 && data.substring(0, 5) == "speed") {
       speedPercentage = constrain(data.substring(6).toDouble(), 0, 1);
       writeBack({String("Set speed to ") + speedPercentage});
+    }
+    else if (data == "check_grabber_current") {
+      writeBack({String("closing: ") + grabberClosing + String(", current: ") + grabberCurrent + String(" mA")});
+    }
+    // gc for grabber current sensing mode
+    else if (data == "gc") {
+      if (!currentSensorFound) {
+        writeBack({String("no current sensor found")});
+      }
+      else {
+        grabberClosing = true;
+        endTargetAngles[grabberI] = 0;
+        shouldPower[grabberI] = true;
+        writeBack({String("closing grabber")});
+      }
     }
 
     //label_move g 0,t 1,
@@ -236,27 +246,45 @@ void powerServos() {
     return;
   }
   prevMicros = curMicros;
-  for (int i = 0; i < numServos; i++) {
-    if (shouldPower[i]) {
-      if (servoMaxSpeeds[i] <= 0) {
-        curTargetAngles[i] = endTargetAngles[i];
-      }
-      float lookahead = servoMaxSpeeds[i] * speedPercentage * dt;
-      lookaheads[i] = lookahead;
-      float error = endTargetAngles[i] - curTargetAngles[i];
-      if (abs(error) <= lookahead) {
-        curTargetAngles[i] = endTargetAngles[i];
-      } else {
-        curTargetAngles[i] += signof(error) * lookahead;
-      }
+
+  if (grabberClosing) {
+    float error = endTargetAngles[grabberI] - curTargetAngles[grabberI];
+
+    if (abs(error) < .001 || grabberCurrent > graspCurrentThreshold_mA) {
+      grabberClosing = false;
+      shouldPower[grabberI] = false;
+    }
+    else {
+      float lookahead = grabberClosingSpeed * dt;
+      curTargetAngles[grabberI] += min(lookahead, abs(error)) * signof(error);
+
+      float t = constrain(calcLerpT(curTargetAngles[grabberI], servoMap[grabberI][2], servoMap[grabberI][3]), 0, 1);
+      int pwm = (int)lerp(servoMap[grabberI][0], servoMap[grabberI][1], t);
+      servos[grabberI].writeMicroseconds(pwm);
     }
   }
+  else {
+    for (int i = 0; i < numServos; i++) {
+      if (shouldPower[i]) {
+        if (servoMaxSpeeds[i] <= 0) {
+          curTargetAngles[i] = endTargetAngles[i];
+        }
+        float lookahead = servoMaxSpeeds[i] * speedPercentage * dt;
+        float error = endTargetAngles[i] - curTargetAngles[i];
+        if (abs(error) <= lookahead) {
+          curTargetAngles[i] = endTargetAngles[i];
+        } else {
+          curTargetAngles[i] += signof(error) * lookahead;
+        }
+      }
+    }
 
-  powerServosRaw(curTargetAngles);
+    powerServosRaw(curTargetAngles);
 
-  for (int i = 0; i < numServos; i++) {
-    if (shouldPower[i] && abs(endTargetAngles[i] - curTargetAngles[i]) < .001) {
-      shouldPower[i] = false;
+    for (int i = 0; i < numServos; i++) {
+      if (shouldPower[i] && abs(endTargetAngles[i] - curTargetAngles[i]) < .001) {
+        shouldPower[i] = false;
+      }
     }
   }
 }

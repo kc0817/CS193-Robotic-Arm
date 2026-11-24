@@ -81,7 +81,10 @@ while True:
                 serial_io.write_speed(float(args[0]))
             except ValueError:
                 error = ("Invalid speed args: " + str(args))
-            
+    elif cmd == "check_current":
+        serial_io.write_check_grabber_current()
+    elif cmd == "gc":
+        serial_io.write_grabber_current_close()
     elif cmd in joint_names:
         if len(args) != 1 and len(args) != 2:
             error = ("Invalid move angle args: " + str(args))
