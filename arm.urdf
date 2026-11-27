@@ -19,7 +19,7 @@ d
         <parent link="turret_link"/>
         <child link="shoulder_link"/>
         <axis xyz="0 1 0"/>
-        <limit lower="-1.4312" upper="1.4312" effort="1.27" velocity="6.16"/>
+        <limit lower="-1.4661" upper="1.3963" effort="1.27" velocity="6.16"/>
         <origin xyz="0 0 .0514"/>
     </joint>
 
@@ -35,7 +35,7 @@ d
         <parent link="elbow_link"/>
         <child link="wrist_pitch_link"/>
         <axis xyz="0 1 0"/>
-        <limit lower="-1.4312" upper="1.4312" effort="1.27" velocity="6.16"/>
+        <limit lower="-1.3265" upper="1.5359" effort="1.27" velocity="6.16"/>
         <origin xyz="0 0 .0718"/>
     </joint>
 

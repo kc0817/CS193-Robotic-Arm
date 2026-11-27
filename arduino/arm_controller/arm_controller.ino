@@ -1,7 +1,6 @@
 #include <Servo.h>
-#include <initializer_list>
-#include <cmath>
 #include <Adafruit_INA219.h>
+#include <initializer_list>
 
 const int numServos = 7;
 const int shoulder1Index = 1;
@@ -20,12 +19,12 @@ String names[numServos] {
   String("g")
 };
 int pins[numServos] = {9, 8, 7, 6, 5, 4, 3}; // TODO: FILL THESE OUT PROPERLY
-int servoMap[numServos][4] = {
+const float servoMap[numServos][4] = {
   {560, 2350, -82, 82}, // turret
-  {560, 2350, -82, 82}, // shoulder 1 4 is actually 0  
-  {565, 2345, -82, 82}, // shoulder 2 already centered
+  {2350, 550, -80, 84}, // shoulder 1 4 is actually 0  
+  {565, 2345, -82, 82}, // shoulder 2 NEED TO RETUNE IF GOING TO USE
   {2350, 560, -82, 82}, // elbow
-  {560, 2350, -105, 60 }, // wrist pitch
+  {560, 2350, -76, 88 }, // wrist pitch
   {560, 2350, -82, 82}, // wrist roll
   {1400, 2150, 0, 1} // grabber
 };
@@ -33,8 +32,8 @@ int servoMap[numServos][4] = {
 // measured in degrees/sec
 int servoMaxSpeeds[numServos] = {
   150,
-  45,
-  45,
+  60,
+  60,
   70,
   150,
   -1,
@@ -49,6 +48,8 @@ const float graspCurrentThreshold_mA = 100; // TODO: tune this
 bool grabberClosing = false;
 const float grabberClosingSpeed = .5;
 float grabberCurrent = 0;
+
+bool moveBlocking = false;
 
 bool shouldPower[numServos] = {true, true, true, true, true, true, true};
 float endTargetAngles[numServos] = {0, 0, 0, 0, 0, 0, 0};
@@ -83,7 +84,7 @@ void loop() {
       String endTargets = "";
       for (int i = 0; i < numServos; i++) {
         curTargets += curTargetAngles[i] + String(", ");
-        endTargets += (std::round(endTargetAngles[i]*10)/10.) + String(", ");
+        endTargets += (round(endTargetAngles[i]*10)/10.) + String(", ");
       }
       writeBack({curTargets, endTargets});
     }
@@ -102,7 +103,7 @@ void loop() {
       writeBack({String("Arm current disabled")});
     } 
     
-    else if (data.length() >= 7 && data.substring(0, 7) == "ch_port") {
+    else if (data.substring(0, 7) == "ch_port") {
       int portSeparator = data.indexOf(" ", 8);
       if (portSeparator == -1) {
         writeBack({String("Invalid ch_port command")});
@@ -134,8 +135,8 @@ void loop() {
   
     } 
 
-    else if (data.length() >= 5 && data.substring(0, 5) == "speed") {
-      speedPercentage = constrain(data.substring(6).toDouble(), 0, 1);
+    else if (data.substring(0, 5) == "speed") {
+      speedPercentage = constrain(data.substring(6).toDouble(), 0, 10);
       writeBack({String("Set speed to ") + speedPercentage});
     }
     else if (data == "check_grabber_current") {
@@ -154,7 +155,7 @@ void loop() {
       }
     }
     //label_move g 0,t 1,
-    else if (data.length() >= 10 && data.substring(0, 10) == "label_move") {
+    else if (data.substring(0, 10) == "label_move") {
       String remaining = data.substring(11);
       int endI = remaining.indexOf(",");
       bool success = true;
@@ -196,8 +197,10 @@ void loop() {
       }
     }
 
-    else if (data.length() >= 4 && data.substring(0, 4) == "move") {
-      data = data.substring(5);
+    else if (data.substring(0, 4) == "move") {
+      moveBlocking = data.substring(0, 13) == "move_blocking";
+      data = data.substring(data.indexOf(" ")+1);
+
 
       for (int i = 0; i < numServos; i++) {
         if (i == shoulder2Index) {
@@ -221,16 +224,17 @@ void loop() {
           data = data.substring(endI+1);
         }
       }
-
-      // powerServosRaw(endTargetAngles);
       
-      String angleStr = String("angles: ");
-      String powerStr = String("should power: ");
-      for (int i = 0; i < numServos; i++) {
-        angleStr += endTargetAngles[i] + String(", ");
-        powerStr += shouldPower[i] + String(", ");
+      if (!moveBlocking) {
+        String angleStr = String("angles: ");
+        String powerStr = String("should power: ");
+        for (int i = 0; i < numServos; i++) {
+          angleStr += endTargetAngles[i] + String(", ");
+          powerStr += shouldPower[i] + String(", ");
+        }
+        writeBack({angleStr, powerStr});
       }
-      writeBack({angleStr, powerStr});
+      
     } else {
       writeBack({String("Invalid Serial message: ") + data});
     }
@@ -282,10 +286,20 @@ void powerServos() {
 
   powerServosRaw(curTargetAngles);
 
+  bool allDone = true;
   for (int i = 0; i < numServos; i++) {
-    if (shouldPower[i] && abs(endTargetAngles[i] - curTargetAngles[i]) < .001) {
-      shouldPower[i] = false;
+    if (shouldPower[i]) {
+      if (abs(endTargetAngles[i] - curTargetAngles[i]) < .001) {
+        shouldPower[i] = false;
+      }
+      else {
+        allDone = false;
+      }
     }
+  }
+  if (moveBlocking && allDone) {
+    moveBlocking = false;
+    writeBack({String("movement done")});
   }
   
 }
