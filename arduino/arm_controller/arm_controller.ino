@@ -1,7 +1,6 @@
 #include <Servo.h>
-#include <initializer_list>
-#include <cmath>
 #include <Adafruit_INA219.h>
+#include <initializer_list>
 
 const int numServos = 7;
 const int shoulder1Index = 1;
@@ -85,7 +84,7 @@ void loop() {
       String endTargets = "";
       for (int i = 0; i < numServos; i++) {
         curTargets += curTargetAngles[i] + String(", ");
-        endTargets += (std::round(endTargetAngles[i]*10)/10.) + String(", ");
+        endTargets += (round(endTargetAngles[i]*10)/10.) + String(", ");
       }
       writeBack({curTargets, endTargets});
     }

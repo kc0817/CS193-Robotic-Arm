@@ -15,9 +15,8 @@ set_dt = 1 / float(os.getenv("FPS"))
 move_pos_step = float(os.getenv("MOVE_COORD_POS_STEP_SIZE"))
 move_pitch_step = float(os.getenv("MOVE_COORD_PITCH_STEP_SIZE"))
 
-ARDUINO_VID = 0x2341
-# urdf_joint_order = ["t", "s", "e", "wp", "wr", "g"]
-joint_names = ["t", "s", "e", "wp", "wr", "g"] #["g", "wr", "wp", "e", "s", "t"]
+ARDUINO_VID = int(os.getenv("ARDUINO_VID"), 16)
+joint_names = ["t", "s", "e", "wp", "wr", "g"]
 joint_targets = [0, 0, 0, 0, 0, 0] 
 home_pos = [0, 0, 0, 0, 0, 0]
 
