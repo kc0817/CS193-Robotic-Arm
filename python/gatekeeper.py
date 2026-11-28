@@ -114,6 +114,10 @@ while True:
                 error = "Invalid unlock joint args: " + str(args)
             else:
                 serial_io.write_unlock_joint(args[0])
+                error = str(serial_io.get_response())
+                serial_io.write_move_joints([(angle if joint_names[i] == args[0] else None) for i, angle in enumerate(joint_targets)])
+                _ = serial_io.get_response()
+
     elif cmd == "get_locks":
         serial_io.write_get_locks()
     elif cmd in joint_names:

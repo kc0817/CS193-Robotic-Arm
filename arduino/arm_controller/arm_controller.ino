@@ -195,9 +195,10 @@ void loop() {
 
       for (int i = 0; i < numServos; i++) {
         if (i == shoulder2Index) {
-          shouldPower[i] = shouldPower[shoulder1Index];
-          if (shouldPower[i]) {
-            endTargetAngles[i] = -endTargetAngles[i-1];
+          shouldPower[shoulder2Index] = shouldPower[shoulder1Index];
+          if (shouldPower[shoulder1Index]) {
+            endTargetAngles[shoulder2Index] = -endTargetAngles[shoulder1Index];
+            travelDists[shoulder2Index] = travelDists[shoulder1Index];
           }
         } else {
           int endI = data.indexOf(",");
@@ -217,7 +218,7 @@ void loop() {
               endTargetAngles[i] = data.substring(0, endI).toDouble();
             }
             endTargetAngles[i] = constrain(endTargetAngles[i], servoMap[i][2], servoMap[i][3]);
-            travelDists[i] = endTargetAngles[i] - curTargetAngles[i];
+            travelDists[i] = abs(endTargetAngles[i] - curTargetAngles[i]);
           }
           data = data.substring(endI+1);
         }
