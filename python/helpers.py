@@ -1,6 +1,14 @@
 import math
 
 from ikpy.chain import Chain
+import matplotlib.pyplot as plt
+
+def save_current_plot(currents: list[float], times: list[float]):
+    plt.plot(times, currents)
+    plt.title("Grabber Current Over Time")
+    plt.xlabel("Time (s)")
+    plt.ylabel("Current (mA)")
+    plt.savefig("current_graph.png")
 
 
 def print_list(l: list):

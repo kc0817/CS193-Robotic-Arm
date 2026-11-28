@@ -46,8 +46,8 @@ class SerialIO:
     
     def write_check_grabber_current(self):
         self.port.write(b"check_grabber_current\n")
-    def write_grabber_current_close(self):
-        self.port.write(b"gc\n")
+    def write_grabber_current_close(self, send_current: bool):
+        self.port.write(("gc" + (" send_current" if send_current else "") + "\n").encode())
     
     def write_lock_joint(self, joint_name: str):
         self.port.write(("lock " + joint_name + "\n").encode())
