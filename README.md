@@ -17,8 +17,8 @@ Build, wire, and program this arm to lift objects up to 100 grams in weight
 ![System diagram](docs/system_diagram.png)
 
 ### Future Plans: 
-1. Upgrade reach of arm, and upgrade from servos to motors
-2. Set up MuJoCo simulation to try and train a RL model to learn to pick up objects
+1. Get inverse kinematics smoother and more reliable
+2. Upgrade reach of arm, and upgrade from servos to motors
 
 ### Tech Stack: 
 Layout:

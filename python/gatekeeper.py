@@ -5,7 +5,7 @@ import time
 
 import numpy as np
 from dotenv import load_dotenv
-from helpers import calc_fk, to_rad
+from helpers import calc_fk, to_rad, save_current_plot
 from ikpy.chain import Chain
 from input_functions import *
 from serial_io import SerialIO
@@ -96,7 +96,21 @@ while True:
     elif cmd == "check_current":
         serial_io.write_check_grabber_current()
     elif cmd == "gc":
-        serial_io.write_grabber_current_close()
+        send_live_current = len(args) == 1 and args[0] == "send_current"
+        serial_io.write_grabber_current_close(send_live_current)
+        if send_live_current:
+            error = serial_io.get_response()[0]
+            if error == "closing grabber":
+                currents = []
+                times = []
+                while True:
+                    data = serial_io.get_response()[0]
+                    if data == "done":
+                        break
+                    current, t = data.split(",")
+                    currents.append(float(current))
+                    times.append(float(t))
+                save_current_plot(currents, times)
     
     elif cmd == "lock":
         if len(args) != 1:
@@ -130,8 +144,6 @@ while True:
             try:
                 # updating target angle
                 index = joint_names.index(cmd)
-                print(index)
-                print(args[0])
                 angle = float(args[0]) + (0 if absolute_angle else joint_targets[index])
                 angles_list = [(angle if i == index else None) for i in range(len(joint_names))]
                 joint_targets[index] = angle

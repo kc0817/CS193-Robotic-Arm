@@ -46,6 +46,7 @@ Adafruit_INA219 currentSensor;
 bool currentSensorFound = false;
 const float graspCurrentThreshold_mA = 100; // TODO: tune this
 bool grabberClosing = false;
+bool sendLiveCurrent = false;
 const float grabberClosingSpeed = .5;
 float grabberCurrent = 0;
 
@@ -59,6 +60,9 @@ float absAngles[numServos] = {0, 0, 0, 0, 0, 0, 0}; // absolute joint angles
 int locked[numServos] = {0, 0, 0, 0, 0, 0, 0};
 unsigned long prevMicros;
 const float TIME_STEP = .0083;
+
+float dt;
+float timeSinceStart = 0;
 
 void setup() {
   Serial.begin(9600);
@@ -81,7 +85,19 @@ void setup() {
 }
 
 void loop() {
+  // standardizing loop times
+  unsigned long curMicros = micros();
+  dt = (curMicros - prevMicros) / 1e6;
+  if (dt < TIME_STEP) {
+    return;
+  }
+  prevMicros = curMicros;
+  timeSinceStart += dt;
+
   grabberCurrent = currentSensor.getCurrent_mA();
+  if (sendLiveCurrent) {
+    writeBack({grabberCurrent + String(",") + timeSinceStart});
+  }
   if (Serial.available() > 0) {
     String data = Serial.readStringUntil('\n');
 
@@ -149,11 +165,14 @@ void loop() {
       writeBack({String("closing: ") + grabberClosing + String(", current: ") + grabberCurrent + String(" mA")});
     }
     // gc for grabber close in current sensing mode
-    else if (data == "gc") {
+    else if (data.substring(0, 2) == "gc") {
       if (!currentSensorFound) {
         writeBack({String("no current sensor found")});
       }
       else {
+        if (data.substring(3) == "send_current") {
+          sendLiveCurrent = true;
+        }
         grabberClosing = true;
         endTargetAngles[grabberI] = 0;
         shouldPower[grabberI] = 0;
@@ -242,13 +261,6 @@ void loop() {
 }
 
 void powerServos() {
-  unsigned long curMicros = micros();
-  float dt = (curMicros - prevMicros) / 1e6;
-  if (dt < TIME_STEP) {
-    return;
-  }
-  prevMicros = curMicros;
-
   if (endTargetAngles[grabberI] != 0) {
     grabberClosing = false;
   }
@@ -256,7 +268,9 @@ void powerServos() {
     float error = endTargetAngles[grabberI] - curTargetAngles[grabberI];
 
     if (abs(error) < .001) {
+      sendLiveCurrent = false;
       grabberClosing = false;
+      writeBack({String("done")});
     } 
     else if (grabberCurrent < graspCurrentThreshold_mA) {
       float lookahead = grabberClosingSpeed * dt * speedPercentage;
