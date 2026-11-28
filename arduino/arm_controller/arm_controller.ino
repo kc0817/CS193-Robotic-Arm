@@ -54,6 +54,8 @@ bool moveBlocking = false;
 bool shouldPower[numServos] = {true, true, true, true, true, true, true};
 float endTargetAngles[numServos] = {0, 0, 0, 0, 0, 0, 0};
 float curTargetAngles[numServos] = {0, 0, 0, 0, 0, 0, 0}; // assumed current angles
+float absAngles[numServos] = {0, 0, 0, 0, 0, 0, 0}; // absolute joint angles
+int locked[numServos] = {0, 0, 0, 0, 0, 0, 0};
 unsigned long prevMicros;
 const float TIME_STEP = .0083;
 
@@ -154,47 +156,32 @@ void loop() {
         writeBack({String("closing grabber")});
       }
     }
-    //label_move g 0,t 1,
-    else if (data.substring(0, 10) == "label_move") {
-      String remaining = data.substring(11);
-      int endI = remaining.indexOf(",");
-      bool success = true;
-      while (endI != -1) {
-        String joint_cmd = remaining.substring(0, endI);
-        int spaceI = joint_cmd.indexOf(" ");
-        String joint_name = joint_cmd.substring(0, spaceI);
-        int jointI = -1;
-        for (int i = 0; i < numServos; i++) {
-          if (names[i] == joint_name) {
-            jointI = i;
-            break;
-          }
-        }
-        if (jointI == -1) {
-          writeBack({String("Joint ") + joint_name + String(" invalid for label move command: ") + data + String(", wth remaming=") + remaining + String("; and endI=") + endI});
-          success = false;
-          break;
-        }
-        endTargetAngles[jointI] = constrain(joint_cmd.substring(spaceI+1).toDouble(), servoMap[jointI][2], servoMap[jointI][3]);
-        shouldPower[jointI] = true;
-        if (jointI == shoulder1Index) {
-          endTargetAngles[shoulder2Index] = -endTargetAngles[jointI];
-          shouldPower[shoulder2Index] = true;
-        }
-
-        remaining = remaining.substring(endI+1);
-        endI = remaining.indexOf(",");
+    else if (data.substring(0, 4) == "lock") {
+      int in = indexOf(data.substring(5), names, numServos);
+      locked[in] = 1;
+      shouldPower[in] = true;
+      if (in == shoulder1Index) {
+        locked[shoulder2Index] = 1;
+      shouldPower[shoulder2Index] = true;
       }
-
-      if (success) {
-        String angleStr = String("angles: ");
-        String powerStr = String("should power: ");
-        for (int i = 0; i < numServos; i++) {
-          angleStr += endTargetAngles[i] + String(", ");
-          powerStr += shouldPower[i] + String(", ");
-        }
-        writeBack({angleStr, powerStr});
+      writeBack({String("locked joint ") + names[in]});
+    }
+    else if (data.substring(0, 6) == "unlock") {
+      int in = indexOf(data.substring(7), names, numServos);
+      locked[in] = 0;
+      shouldPower[in] = false;
+      if (in == shoulder1Index) {
+        locked[shoulder2Index] = 0;
+        shouldPower[shoulder2Index] = false;
       }
+      writeBack({String("unlocked joint ") + names[in]});
+    }
+    else if (data == "get_locks") {
+      String lockStr = "";
+      for (int i = 0; i < numServos; i++) {
+        lockStr += locked[i] + String(",");
+      }
+      writeBack({lockStr});
     }
 
     else if (data.substring(0, 4) == "move") {
@@ -212,7 +199,12 @@ void loop() {
           int endI = data.indexOf(",");
           if (endI == 0) {
             shouldPower[i] = false;
-          } else {
+          } 
+          else if (locked[i]) {
+            writeBack({String("cannot move ") + names[i] + String(" because it's locked")});
+            return;
+          }
+          else {
             shouldPower[i] = true;
             if (endI == -1) {
               endTargetAngles[i] = data.toDouble();
@@ -268,9 +260,23 @@ void powerServos() {
       servos[grabberI].writeMicroseconds(pwm);
     }
   }
+  float lookaheads[numServos] = {0, 0, 0, 0, 0, 0, 0};
   for (int i = 0; i < numServos; i++) {
+    // want custom powering logic for locked joints
+    if (locked[i]) {
+      // TODO fill out custom powering logic for these locked joints
+      if (names[i] == "e") {
+        endTargetAngles[i] -= lookaheads[shoulder1Index];
+        curTargetAngles[i] = endTargetAngles[i];
+        lookaheads[i] = -lookaheads[shoulder1Index];
+      } else if (names[i] == "wp") {
+        endTargetAngles[i] -= lookaheads[shoulder1Index] + lookaheads[i-1];
+        curTargetAngles[i] = endTargetAngles[i];
+      }
+    }
+    
     // don't want to normally power the grabber when its in teh current sensing closing mode
-    if (shouldPower[i] && (!grabberClosing || grabberI != i)) {
+    else if (shouldPower[i] && (!grabberClosing || grabberI != i)) {
       if (servoMaxSpeeds[i] <= 0) {
         curTargetAngles[i] = endTargetAngles[i];
       }
@@ -278,8 +284,10 @@ void powerServos() {
       float error = endTargetAngles[i] - curTargetAngles[i];
       if (abs(error) <= lookahead) {
         curTargetAngles[i] = endTargetAngles[i];
+        lookaheads[i] = error;
       } else {
         curTargetAngles[i] += signof(error) * lookahead;
+        lookaheads[i] = lookahead * signof(error);
       }
     }
   }
@@ -307,7 +315,7 @@ void powerServosRaw(const float angles[]) {
   int pwms[numServos];
   mapAnglesToPwms(angles, pwms);
   for (int i = 0; i < numServos; i++) {
-    if (shouldPower[i]) {
+    if (shouldPower[i] || locked[i]) {
       servos[i].writeMicroseconds(pwms[i]);
     }
   }
@@ -349,6 +357,14 @@ int signof(const float n) {
 int indexOf(const int n, const int list[], const int size) {
   for (int i = 0; i < size; i++) {
     if (list[i] == n) {
+      return i;
+    }
+  }
+  return -1;
+}
+int indexOf(const String s, const String list[], const int size) {
+  for (int i = 0; i < size; i++) {
+    if (list[i] == s) {
       return i;
     }
   }

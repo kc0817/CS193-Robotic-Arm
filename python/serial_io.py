@@ -48,6 +48,11 @@ class SerialIO:
         self.port.write(b"check_grabber_current\n")
     def write_grabber_current_close(self):
         self.port.write(b"gc\n")
+    
+    def write_lock_joint(self, joint_name: str):
+        self.port.write(("lock " + joint_name + "\n").encode())
+    def write_unlock_joint(self, joint_name: str):
+        self.port.write(("unlock " + joint_name + "\n").encode())
 
     def write_move_joints(self, angles: list[float | None]):
         if self.enabled:
@@ -66,14 +71,11 @@ class SerialIO:
                     out_str += str(angle)
                 out_str += ","
             self.port.write((out_str + "\n").encode())
-        
-    def write_labeled_move_joints(self, names: list[float], angles: list[float]):
-        if self.enabled:
-            out_str = "label_move "
-            for i in range(len(names)):
-                out_str += names[i] + " " + str(angles[i]) + ","
-            self.port.write((out_str + "\n").encode())
     
+    def write_get_locks(self): 
+        if self.enabled:
+            self.port.write(b"get_locks\n")
+
     def get_response(self) -> list[str]:
         if self.enabled:
             lines = int(self.port.readline().decode().strip())

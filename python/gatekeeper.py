@@ -18,6 +18,7 @@ move_pitch_step = float(os.getenv("MOVE_COORD_PITCH_STEP_SIZE"))
 ARDUINO_VID = int(os.getenv("ARDUINO_VID"), 16)
 joint_names = ["t", "s", "e", "wp", "wr", "g"]
 joint_targets = [0, 0, 0, 0, 0, 0] 
+abs_targets = [0, 0, 0, 0, 0, 0]
 home_pos = [0, 0, 0, 0, 0, 0]
 
 chain = Chain.from_urdf_file("arm.urdf")
@@ -36,6 +37,21 @@ terminal_thread.start()
 
 gamepad_thread = threading.Thread(target=read_gamepad_input, daemon=True)
 # gamepad_thread.start()
+
+def update_joints(new_joints):
+    global joint_targets, abs_targets, target_pos, target_pitch
+    joint_targets[:] = new_joints[:]
+
+    # updating absolute joint angles
+    abs_targets[:] = joint_targets[:]
+    abs_targets[2] += abs_targets[1]
+    abs_targets[3] += abs_targets[2]
+
+    # updating end effector position
+    pos, pitch = calc_fk(chain, joint_targets)
+    target_pos = pos.tolist()
+    target_pitch = pitch
+
 
 while True:
     data = cmd_q.get()
@@ -67,12 +83,8 @@ while True:
             except ValueError:
                 error = ("Invalid change port args: " + str(args))
     elif cmd == "home":
-        joint_targets = home_pos.copy()
-        # updating end effector position
-        pos, pitch = calc_fk(chain, joint_targets)
-        target_pos = pos.tolist()
-        target_pitch = pitch
-        serial_io.write_move_joints(home_pos)
+        update_joints(home_pos)
+        serial_io.write_move_joints(joint_targets)
     elif cmd == "speed":
         if len(args) != 1:
             error = ("Invalid speed args: " + str(args))
@@ -85,6 +97,25 @@ while True:
         serial_io.write_check_grabber_current()
     elif cmd == "gc":
         serial_io.write_grabber_current_close()
+    
+    elif cmd == "lock":
+        if len(args) != 1:
+            error = "Invalid lock joint args: " + str(args)
+        else:
+            if args[0] not in joint_names:
+                error = "Invalid lock joint args: " + str(args)
+            else:
+                serial_io.write_lock_joint(args[0])
+    elif cmd == "unlock":
+        if len(args) != 1:
+            error = "Invalid unlock joint args: " + str(args)
+        else:
+            if args[0] not in joint_names:
+                error = "Invalid unlock joint args: " + str(args)
+            else:
+                serial_io.write_unlock_joint(args[0])
+    elif cmd == "get_locks":
+        serial_io.write_get_locks()
     elif cmd in joint_names:
         if len(args) != 1 and len(args) != 2:
             error = ("Invalid move angle args: " + str(args))
