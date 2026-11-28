@@ -51,9 +51,10 @@ float grabberCurrent = 0;
 
 bool moveBlocking = false;
 
-bool shouldPower[numServos] = {true, true, true, true, true, true, true};
+int shouldPower[numServos] = {1, 1, 1, 1, 1, 1, 1};
 float endTargetAngles[numServos] = {0, 0, 0, 0, 0, 0, 0};
 float curTargetAngles[numServos] = {0, 0, 0, 0, 0, 0, 0}; // assumed current angles
+float travelDists[numServos] = {0, 0, 0, 0, 0, 0, 0};
 float absAngles[numServos] = {0, 0, 0, 0, 0, 0, 0}; // absolute joint angles
 int locked[numServos] = {0, 0, 0, 0, 0, 0, 0};
 unsigned long prevMicros;
@@ -74,6 +75,9 @@ void setup() {
   // initiating servos to zero positions
   prevMicros = micros();
   powerServosRaw(endTargetAngles);
+  for (int i = 0; i < numServos; i++) {
+    shouldPower[i] = 0;
+  }
 }
 
 void loop() {
@@ -152,27 +156,27 @@ void loop() {
       else {
         grabberClosing = true;
         endTargetAngles[grabberI] = 0;
-        shouldPower[grabberI] = false;
+        shouldPower[grabberI] = 0;
         writeBack({String("closing grabber")});
       }
     }
     else if (data.substring(0, 4) == "lock") {
       int in = indexOf(data.substring(5), names, numServos);
       locked[in] = 1;
-      shouldPower[in] = true;
+      shouldPower[in] = 1;
       if (in == shoulder1Index) {
         locked[shoulder2Index] = 1;
-      shouldPower[shoulder2Index] = true;
+      shouldPower[shoulder2Index] = 1;
       }
       writeBack({String("locked joint ") + names[in]});
     }
     else if (data.substring(0, 6) == "unlock") {
       int in = indexOf(data.substring(7), names, numServos);
       locked[in] = 0;
-      shouldPower[in] = false;
+      shouldPower[in] = 0;
       if (in == shoulder1Index) {
         locked[shoulder2Index] = 0;
-        shouldPower[shoulder2Index] = false;
+        shouldPower[shoulder2Index] = 0;
       }
       writeBack({String("unlocked joint ") + names[in]});
     }
@@ -198,20 +202,22 @@ void loop() {
         } else {
           int endI = data.indexOf(",");
           if (endI == 0) {
-            shouldPower[i] = false;
+            shouldPower[i] = 0;
           } 
           else if (locked[i]) {
             writeBack({String("cannot move ") + names[i] + String(" because it's locked")});
             return;
           }
           else {
-            shouldPower[i] = true;
+            shouldPower[i] = 1;
             if (endI == -1) {
               endTargetAngles[i] = data.toDouble();
+              
             } else {
               endTargetAngles[i] = data.substring(0, endI).toDouble();
             }
             endTargetAngles[i] = constrain(endTargetAngles[i], servoMap[i][2], servoMap[i][3]);
+            travelDists[i] = endTargetAngles[i] - curTargetAngles[i];
           }
           data = data.substring(endI+1);
         }
@@ -280,15 +286,22 @@ void powerServos() {
       if (servoMaxSpeeds[i] <= 0) {
         curTargetAngles[i] = endTargetAngles[i];
       }
-      float lookahead = servoMaxSpeeds[i] * speedPercentage * dt;
-      float error = endTargetAngles[i] - curTargetAngles[i];
-      if (abs(error) <= lookahead) {
-        curTargetAngles[i] = endTargetAngles[i];
-        lookaheads[i] = error;
-      } else {
-        curTargetAngles[i] += signof(error) * lookahead;
-        lookaheads[i] = lookahead * signof(error);
+      else {
+        float error = endTargetAngles[i] - curTargetAngles[i];
+        if (error == 0) {
+          continue;
+        }
+        float t = constrain(abs(error) / travelDists[i], 0, 1);
+        float lookahead = servoMaxSpeeds[i] * speedPercentage * dt * get_lookahead_scale(t);
+        if (abs(error) <= lookahead) {
+          curTargetAngles[i] = endTargetAngles[i];
+          lookaheads[i] = error;
+        } else {
+          curTargetAngles[i] += signof(error) * lookahead;
+          lookaheads[i] = lookahead * signof(error);
+        }
       }
+      
     }
   }
 
@@ -298,7 +311,7 @@ void powerServos() {
   for (int i = 0; i < numServos; i++) {
     if (shouldPower[i]) {
       if (abs(endTargetAngles[i] - curTargetAngles[i]) < .001) {
-        shouldPower[i] = false;
+        shouldPower[i] = 0;
       }
       else {
         allDone = false;
@@ -352,6 +365,12 @@ int signof(const float n) {
     return -1;
   }
   return 0;
+}
+
+// MAKE SURE T IS BETWEEN 0 AND 1 (INCLUSIVE)
+float get_lookahead_scale(float t) {
+  float a = .5;
+  return (1-a) * sin(PI * t) + a;
 }
 
 int indexOf(const int n, const int list[], const int size) {

@@ -65,7 +65,7 @@ while True:
     if cmd == "raw":
         arg_str = " ".join(arg for arg in args)
         serial_io.write_raw(arg_str)
-    elif cmd == "get_angles":
+    elif cmd == "get_angles": # TODO: MAKE THIS REQUEST ANGLE DATA FROM ARDUINO
         error = str(joint_targets)
     elif cmd == "start":
         serial_io.write_start()
